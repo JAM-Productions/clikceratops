@@ -22,7 +22,7 @@ You'll need to have Node.js and npm installed on your machine.
 
 1. Clone the repo:
    ```sh
-   git clone https://github.com/your_username/clikceratops.git
+   git clone https://github.com/JAM-Productions/clikceratops.git
    ```
 2. Install NPM packages:
    ```sh
