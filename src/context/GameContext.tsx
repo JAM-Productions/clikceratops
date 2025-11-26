@@ -16,6 +16,30 @@ const INITIAL_STATE: GameState = {
     language: 'en',
 };
 
+const getInitialState = (): GameState => {
+    let finalState = { ...INITIAL_STATE };
+
+    try {
+        const savedProgress = localStorage.getItem('clikceratops_save');
+        if (savedProgress) {
+            const parsedProgress = JSON.parse(savedProgress);
+            finalState = { ...finalState, ...parsedProgress };
+        }
+
+        const savedSettings = localStorage.getItem('clikceratops_settings');
+        if (savedSettings) {
+            const parsedSettings = JSON.parse(savedSettings);
+            finalState = { ...finalState, ...parsedSettings };
+        }
+    } catch (e) {
+        console.error('Failed to load saved data', e);
+        // If loading fails, return the default initial state
+        return INITIAL_STATE;
+    }
+
+    return finalState;
+};
+
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 const gameReducer = (state: GameState, action: GameAction): GameState => {
@@ -92,6 +116,12 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         case 'LOAD_GAME':
             return action.payload;
         case 'RESET_GAME':
+            try {
+                localStorage.removeItem('clikceratops_save');
+                localStorage.removeItem('clikceratops_settings');
+            } catch (e) {
+                console.error('Failed to clear saved data on reset', e);
+            }
             return INITIAL_STATE;
         default:
             return state;
@@ -99,24 +129,23 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
 };
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [state, dispatch] = useReducer(gameReducer, INITIAL_STATE);
+    const [state, dispatch] = useReducer(gameReducer, getInitialState());
 
-    // Load game from local storage on mount
+    // Save language and theme to a separate, small local storage item for instant persistence.
     useEffect(() => {
-        const savedState = localStorage.getItem('clikceratops_save');
-        if (savedState) {
-            try {
-                const parsedState = JSON.parse(savedState);
-                // Merge with initial state to ensure new fields are present if schema changes
-                dispatch({ type: 'LOAD_GAME', payload: { ...INITIAL_STATE, ...parsedState } });
-            } catch (e) {
-                console.error('Failed to load save game', e);
-            }
+        try {
+            const settings = {
+                language: state.language,
+                currentThemeId: state.currentThemeId,
+            };
+            localStorage.setItem('clikceratops_settings', JSON.stringify(settings));
+        } catch (e) {
+            console.error('Failed to save settings', e);
         }
-    }, []);
+    }, [state.language, state.currentThemeId]);
 
-    // Save game to local storage periodically
-    // Use a ref to access current state inside interval without re-running effect
+
+    // Save the main game state periodically.
     const stateRef = useRef(state);
     useEffect(() => {
         stateRef.current = state;
@@ -124,7 +153,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     useEffect(() => {
         const saveInterval = setInterval(() => {
-            localStorage.setItem('clikceratops_save', JSON.stringify({ ...stateRef.current, lastSaveTime: Date.now() }));
+            // Exclude settings from the main save file to avoid duplication.
+            const { language, currentThemeId, ...gameStateToSave } = stateRef.current;
+            localStorage.setItem('clikceratops_save', JSON.stringify({ ...gameStateToSave, lastSaveTime: Date.now() }));
         }, 5000); // Save every 5 seconds
 
         return () => clearInterval(saveInterval);
